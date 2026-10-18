@@ -1,95 +1,60 @@
-# CA Practice Management System
+# CAFlow India: CA practice management
 
-A Windows-friendly application foundation based on the uploaded CAFlow India HTML prototype. It converts the visual concept into a React + TypeScript application and introduces a Supabase data layer and initial multi-tenant schema.
+React + TypeScript + Vite front end with a Supabase (PostgreSQL) back end. Deployed on Vercel.
 
-## Included in this starter
+## Modules
 
-- Responsive firm dashboard
-- Client directory and Add Client form
-- Compliance task register, create-task form and status updates
-- Review queue and deadline list
-- Demo mode when Supabase credentials are absent
-- Supabase client integration when `.env` is configured
-- Initial PostgreSQL schema for firms, members, clients, compliance tasks and audit events, with RLS policies
-- Original prototype preserved as `reference-caflow-prototype.html`
+| Module | What it does |
+|---|---|
+| Dashboard | KPIs, monthly filing completion, critical alerts, upcoming deadlines, risk summary, status distribution, team workload, recent activity |
+| Clients | Client register with PAN / TAN / GSTIN validation, services, package, partner; detail tabs for compliance, tasks, documents, filings, messages, billing and portal access |
+| Compliance calendar | Month and agenda views by statutory or internal due date, with filters |
+| Tasks & workflows | 11-step workflow (Scheduled → Completed), table and drag-and-drop kanban, checklist, comments, activity log, reassignment, automation rules |
+| Regulatory filings | Assisted filing: record submission and acknowledgement, upload evidence, partner verification |
+| Documents | Document requests per task, uploads to private storage, accept / reject with comments, reminders |
+| Notices & assessments | Log notices with demand, response due date, owner and status |
+| Notifications | In-app alerts; email and WhatsApp messages are logged (no provider is connected, so nothing is sent); editable templates |
+| Team & workload | Team members, roles, capacity and utilisation; bulk reassignment |
+| Reports | Completion, filing status, overdue by person, document collection, workload, client health, outstanding fees; CSV export |
+| Billing | Invoices with 18% GST, drafts, payments, reminders (partners only) |
+| Compliance rules | Catalogue of due-date rules with proposals, partner approval and version history |
+| Integrations | What each external connection would need (none are connected yet except file storage) |
+| Settings | Firm profile, permissions, notification preferences, escalation policies |
+| Client portal | Client users see only their own company: timeline, requested documents (upload), filings, invoices, messages |
 
-## Important status
+Due dates are generated from standard patterns (for example GSTR-3B on the 20th of the following month). They ignore extensions, QRMP and special notifications, so they **must be checked against official sources**.
 
-This is a **development foundation, not a production-ready accounting/compliance system**. Demo mode keeps edits in memory and loses them on refresh. Supabase mode requires the schema migration and a properly provisioned firm membership. The current UI has no completed sign-in/onboarding flow, document upload/storage, client portal, notification delivery, statutory portal filing, fee invoicing, or fully enforced role-specific permissions. Do not use real PAN/GSTIN, client documents or confidential financial data until authentication, tenant isolation, access policies, storage and security have been reviewed and tested.
+## Database
 
-The sample statutory dates and records are illustrative only; verify all compliance deadlines with authoritative sources before using them operationally.
+Run these in the Supabase SQL Editor, in order (each is safe to re-run):
 
-## Build on Windows 10/11 using PowerShell
+1. `supabase/migrations/0004_match_live_database.sql`
+2. `supabase/migrations/0005_practice_modules.sql`
 
-### 1. Install prerequisites
+`supabase/archive/` holds early drafts that do not match the live database; do not run them.
 
-Install Node.js 20 LTS or newer and Git for Windows. Open a new PowerShell terminal and verify:
+Access is enforced by row-level security:
 
-```powershell
-node --version
-npm --version
-git --version
-```
+- **Partners** (managing partner / partner) see and manage everything in their firm.
+- **Staff** work on clients, tasks, filings, documents, notices and messages, but cannot see invoices or change settings, rules, team or portal access.
+- **Client users** see only the client company their email was given access to.
 
-### 2. Unzip and enter the project
+## Supabase auth settings (important)
 
-Extract `ca-practice-management-system.zip`, then run PowerShell in the extracted folder:
+- Keep **Authentication → Sign In / Providers → Email → Confirm email** turned **on**. Client portal access is linked by email address, and only confirmed emails can claim it.
+- Set **Authentication → URL Configuration → Site URL** to the Vercel address and add it (plus `https://*-<team>.vercel.app/**` for previews) under Redirect URLs.
 
-```powershell
-cd path\to\ca-practice-management-system
+## Local development (Codespaces or your machine)
+
+```bash
 npm install
-Copy-Item .env.example .env
+cp .env.example .env   # fill in VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY
 npm run dev
+npm run build          # type-check + production build
 ```
 
-Open the local URL Vite prints, usually `http://localhost:5173`.
+Never put the Supabase service-role key in the front end or in Git.
 
-### 3. Run a production build check
+## Not yet built
 
-Stop the dev server with `Ctrl+C`, then run:
-
-```powershell
-npm run typecheck
-npm run build
-npm run preview
-```
-
-### 4. Configure Supabase persistence
-
-1. Create a new Supabase project for this application (do not reuse a project containing unrelated or sensitive data without a migration plan).
-2. In Supabase SQL Editor, review and run `supabase/migrations/0001_initial_schema.sql`.
-3. Copy the Project URL and anon/publishable key from Supabase Project Settings → API into `.env`:
-
-```dotenv
-VITE_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
-VITE_SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_OR_PUBLISHABLE_KEY
-```
-
-(`VITE_SUPABASE_PUBLISHABLE_KEY` is also accepted instead of `VITE_SUPABASE_ANON_KEY`.)
-
-After `0001_initial_schema.sql`, also run `supabase/migrations/0002_onboarding_and_integrity.sql`.
-
-4. Restart Vite after editing `.env`.
-
-**Current limitation:** the schema is multi-tenant, but this starter does not yet implement account creation, firm creation, or adding the signed-in user to `firm_members`. Consequently, authenticated Supabase queries will return no rows until a secure onboarding/bootstrap process creates a firm and membership. Do not bypass RLS or place a Supabase service-role key in the browser. The next implementation step is authentication + secure first-firm setup, then tests proving one firm's users cannot access another firm's records.
-
-## Suggested implementation sequence
-
-1. Authentication, firm onboarding, invitations, role-specific authorization and tenant-isolation tests.
-2. Clients: edit/detail screens, contacts, service engagements, PAN/GSTIN validation, duplicate checks.
-3. Compliance engine: versioned task templates, financial-year/period generation, calendar, internal dates, reviewer workflow and verified statutory deadline sources.
-4. Documents: private object storage, signed links, versioning, virus scanning, retention and evidence logs.
-5. Client portal: secure upload, document request/response, queries and approval.
-6. Notices and filing evidence: manual filing records first; portal integrations only with authorised providers and consent.
-7. Billing, fee schedules, invoices, payment tracking and reports.
-8. Notifications, audit trail, backups, observability, deployment, security review and disaster-recovery testing.
-
-## Windows Terminal / Git workflow
-
-```powershell
-git init
-git add .
-git commit -m "Initial CA practice management foundation"
-```
-
-Keep `.env` out of Git. Never commit credentials, client identifiers or uploaded documents.
+Payroll, a background scheduler for automation rules, sending email / WhatsApp, and direct filing with GSTN / ITD / MCA providers.
