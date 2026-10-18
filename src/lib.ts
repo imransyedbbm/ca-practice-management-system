@@ -36,7 +36,7 @@ export const isSupabaseConfigured = Boolean(supabase);
 export function requireSupabase() {
   if (!supabase) {
     throw new Error(
-      'Supabase is not configured. Check VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY in your .env file.',
+      'Supabase is not configured. Check VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY (or VITE_SUPABASE_PUBLISHABLE_KEY) in your .env file.',
     );
   }
 
@@ -87,7 +87,7 @@ export const money = (n: number) =>
  */
 export const shortDate = (s: string) =>
   s
-    ? new Date(${s}T00:00:00).toLocaleDateString('en-IN', {
+    ? new Date(`${s}T00:00:00`).toLocaleDateString('en-IN', {
         day: '2-digit',
         month: 'short',
         year: 'numeric',
@@ -123,3 +123,32 @@ export type Task = {
   reviewer: string;
   client_name?: string;
 };
+
+let cachedFirmId: string | null = null;
+
+/**
+ * Returns the firm id of the signed-in user, or null if not signed in
+ * or not yet a member of any firm. Cached after the first lookup.
+ */
+export async function currentFirmId(): Promise<string | null> {
+  if (cachedFirmId) return cachedFirmId;
+  if (!supabase) return null;
+  const { data: auth } = await supabase.auth.getUser();
+  if (!auth.user) return null;
+  const { data, error } = await supabase
+    .from('firm_members')
+    .select('firm_id')
+    .eq('user_id', auth.user.id)
+    .eq('active', true)
+    .order('created_at')
+    .limit(1)
+    .maybeSingle();
+  if (error || !data) return null;
+  cachedFirmId = data.firm_id as string;
+  return cachedFirmId;
+}
+
+/** Clears the cached firm id (call on sign-out or after creating a firm). */
+export function resetFirmCache() {
+  cachedFirmId = null;
+}

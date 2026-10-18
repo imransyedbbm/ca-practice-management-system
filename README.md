@@ -65,6 +65,10 @@ VITE_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
 VITE_SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_OR_PUBLISHABLE_KEY
 ```
 
+(`VITE_SUPABASE_PUBLISHABLE_KEY` is also accepted instead of `VITE_SUPABASE_ANON_KEY`.)
+
+After `0001_initial_schema.sql`, also run `supabase/migrations/0002_onboarding_and_integrity.sql`.
+
 4. Restart Vite after editing `.env`.
 
 **Current limitation:** the schema is multi-tenant, but this starter does not yet implement account creation, firm creation, or adding the signed-in user to `firm_members`. Consequently, authenticated Supabase queries will return no rows until a secure onboarding/bootstrap process creates a firm and membership. Do not bypass RLS or place a Supabase service-role key in the browser. The next implementation step is authentication + secure first-firm setup, then tests proving one firm's users cannot access another firm's records.
