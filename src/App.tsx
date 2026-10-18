@@ -67,7 +67,7 @@ const emptyClient = {
   phone: '',
   pan: '',
   gstin: '',
-  status: 'Active',
+  status: 'active',
   services: 'Income Tax',
 };
 
@@ -78,8 +78,8 @@ const emptyTask = {
   period: '',
   due_date: iso(new Date()),
   internal_due_date: iso(new Date()),
-  status: 'Pending',
-  priority: 'Medium',
+  status: 'pending',
+  priority: 'medium',
   assigned_to: '',
   reviewer: '',
 };
@@ -95,7 +95,20 @@ const navItems: { label: ViewName; icon: typeof LayoutDashboard }[] = [
 ];
 
 function getErrorMessage(error: unknown) {
-  if (error instanceof Error) return error.message;
+  // Supabase returns plain error objects (not always Error instances), so read their fields.
+  console.error(error);
+  if (error && typeof error === 'object') {
+    const e = error as { message?: string; details?: string; hint?: string; code?: string };
+    const friendly: Record<string, string> = {
+      '23505': 'This record already exists (for clients: same PAN already in your firm).',
+      '23514': 'A value failed validation. Check PAN (ABCDE1234F), GSTIN (29ABCDE1234F1Z5) and that the internal due date is not after the due date.',
+      '42501': 'You do not have permission to do this in this firm.',
+      '22P02': 'One of the selected values is not accepted by the database.',
+    };
+    const detail = [e.message, e.details, e.hint].filter(Boolean).join(' | ');
+    if (e.code && friendly[e.code]) return `${friendly[e.code]} (${detail})`;
+    if (detail) return detail;
+  }
   return 'Something went wrong. Please try again.';
 }
 
@@ -475,7 +488,7 @@ function App() {
 
       if (updateError) throw updateError;
 
-      setNotice(`Task marked ${status.toLowerCase()}.`);
+      setNotice(`Task marked ${status.replace(/_/g, ' ')}.`);
       await loadFirmData(firm);
     } catch (err) {
       setError(getErrorMessage(err));
@@ -497,17 +510,17 @@ function App() {
   );
 
   const overdueTasks = tasks.filter(
-    (task) => task.status !== 'Completed' && task.status !== 'Filed' && task.due_date < iso(today),
+    (task) => task.status !== 'completed' && task.status !== 'filed' && task.due_date < iso(today),
   );
   const pendingTasks = tasks.filter(
-    (task) => !['Completed', 'Filed'].includes(task.status),
+    (task) => !['completed', 'filed'].includes(task.status),
   );
   const reviewTasks = tasks.filter((task) =>
-    ['Under Review', 'Review'].includes(task.status),
+    ['under_review', 'review'].includes(task.status),
   );
   const dueSoonTasks = tasks.filter(
     (task) =>
-      !['Completed', 'Filed'].includes(task.status) &&
+      !['completed', 'filed'].includes(task.status) &&
       task.due_date >= iso(today) &&
       task.due_date <= iso(new Date(today.getFullYear(), today.getMonth(), today.getDate() + 7)),
   );
@@ -899,7 +912,7 @@ VITE_SUPABASE_PUBLISHABLE_KEY=YOUR_PUBLISHABLE_KEY`}
 
   const renderReviewQueue = () => {
     const reviewQueue = tasks.filter((task) =>
-      ['Under Review', 'Review'].includes(task.status),
+      ['under_review', 'review'].includes(task.status),
     );
 
     return (
@@ -928,19 +941,19 @@ VITE_SUPABASE_PUBLISHABLE_KEY=YOUR_PUBLISHABLE_KEY`}
         <MetricCard title="Open tasks" value={String(pendingTasks.length)} detail="Not yet completed or filed" icon={Activity} />
         <MetricCard title="Overdue" value={String(overdueTasks.length)} detail="Past due date" icon={Clock3} alert={overdueTasks.length > 0} />
         <MetricCard title="Due soon" value={String(dueSoonTasks.length)} detail="Next seven days" icon={CalendarDays} />
-        <MetricCard title="Completed / filed" value={String(tasks.filter((task) => ['Completed', 'Filed'].includes(task.status)).length)} detail="Closed tasks" icon={CheckCircle2} />
+        <MetricCard title="Completed / filed" value={String(tasks.filter((task) => ['completed', 'filed'].includes(task.status)).length)} detail="Closed tasks" icon={CheckCircle2} />
         <MetricCard title="Awaiting review" value={String(reviewTasks.length)} detail="Tasks in review" icon={ShieldCheck} />
       </div>
       <div className="rounded-2xl border border-slate-200 bg-white p-5">
         <h3 className="font-semibold text-slate-900">Task status summary</h3>
         <div className="mt-4 space-y-4">
-          {['Pending', 'In Progress', 'Under Review', 'Completed', 'Filed'].map((status) => {
+          {['pending', 'in_progress', 'under_review', 'completed', 'filed'].map((status) => {
             const count = tasks.filter((task) => task.status === status).length;
             const percentage = tasks.length ? (count / tasks.length) * 100 : 0;
             return (
               <div key={status}>
                 <div className="mb-1.5 flex items-center justify-between text-sm">
-                  <span className="text-slate-600">{status}</span>
+                  <span className="capitalize text-slate-600">{status.replace(/_/g, ' ')}</span>
                   <span className="font-medium text-slate-900">{count}</span>
                 </div>
                 <div className="h-2 overflow-hidden rounded-full bg-slate-100">
@@ -1155,7 +1168,7 @@ VITE_SUPABASE_PUBLISHABLE_KEY=YOUR_PUBLISHABLE_KEY`}
               </Field>
               <Field label="Status">
                 <select className={inputClass} value={clientForm.status} onChange={(event) => setClientForm({ ...clientForm, status: event.target.value })}>
-                  {['Active', 'Inactive', 'Prospect'].map((item) => <option key={item}>{item}</option>)}
+                  {[['active', 'Active'], ['inactive', 'Inactive'], ['prospect', 'Prospect']].map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                 </select>
               </Field>
             </div>
@@ -1219,12 +1232,12 @@ VITE_SUPABASE_PUBLISHABLE_KEY=YOUR_PUBLISHABLE_KEY`}
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Priority">
                 <select className={inputClass} value={taskForm.priority} onChange={(event) => setTaskForm({ ...taskForm, priority: event.target.value })}>
-                  {['Low', 'Medium', 'High', 'Urgent'].map((item) => <option key={item}>{item}</option>)}
+                  {[['low', 'Low'], ['medium', 'Medium'], ['high', 'High'], ['urgent', 'Urgent']].map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                 </select>
               </Field>
               <Field label="Status">
                 <select className={inputClass} value={taskForm.status} onChange={(event) => setTaskForm({ ...taskForm, status: event.target.value })}>
-                  {['Pending', 'In Progress', 'Under Review', 'Completed', 'Filed'].map((item) => <option key={item}>{item}</option>)}
+                  {[['pending', 'Pending'], ['in_progress', 'In Progress'], ['under_review', 'Under Review'], ['completed', 'Completed'], ['filed', 'Filed']].map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                 </select>
               </Field>
             </div>
@@ -1358,7 +1371,7 @@ function TaskTable({
               <td className="px-5 py-4 text-slate-600">{task.client_name || '—'}</td>
               <td className="px-5 py-4 text-slate-600">{task.due_date ? shortDate(task.due_date) : '—'}</td>
               <td className="px-5 py-4">
-                <span className={`text-xs font-medium ${['High', 'Urgent'].includes(task.priority) ? 'text-rose-600' : 'text-slate-600'}`}>
+                <span className={`text-xs font-medium capitalize ${['high', 'urgent'].includes(task.priority) ? 'text-rose-600' : 'text-slate-600'}`}>
                   {task.priority}
                 </span>
               </td>
@@ -1370,8 +1383,8 @@ function TaskTable({
                   onChange={(event) => void onStatusChange(task, event.target.value)}
                   className="max-w-36 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs outline-none focus:border-blue-500"
                 >
-                  {['Pending', 'In Progress', 'Under Review', 'Completed', 'Filed'].map((status) => (
-                    <option key={status} value={status}>{status}</option>
+                  {[['pending', 'Pending'], ['in_progress', 'In Progress'], ['under_review', 'Under Review'], ['completed', 'Completed'], ['filed', 'Filed']].map(([value, label]) => (
+                    <option key={value} value={value}>{label}</option>
                   ))}
                 </select>
               </td>
