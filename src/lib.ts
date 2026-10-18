@@ -4,13 +4,15 @@ export const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as
   | string
   | undefined;
 
-// Supports the variable name already used by this project.
-// VITE_SUPABASE_PUBLISHABLE_KEY is also supported for compatibility.
 export const supabaseKey = (
   import.meta.env.VITE_SUPABASE_ANON_KEY ||
   import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY
 ) as string | undefined;
 
+/**
+ * Supabase client.
+ * Uses the public/publishable key and persists the signed-in session.
+ */
 export const supabase =
   supabaseUrl && supabaseKey
     ? createClient(supabaseUrl, supabaseKey, {
@@ -23,18 +25,18 @@ export const supabase =
     : null;
 
 /**
- * Check whether Supabase configuration is present.
- * This does not verify that the key is valid or that the database is reachable.
+ * Indicates whether the required environment variables are present.
+ * This does not verify that the credentials are valid.
  */
 export const isSupabaseConfigured = Boolean(supabase);
 
 /**
- * Use this helper when a feature requires a configured Supabase client.
+ * Returns the Supabase client or throws a readable configuration error.
  */
 export function requireSupabase() {
   if (!supabase) {
     throw new Error(
-      'Supabase is not configured. Check VITE_SUPABASE_URL and your publishable key in the .env file.',
+      'Supabase is not configured. Check VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY in your .env file.',
     );
   }
 
@@ -42,14 +44,20 @@ export function requireSupabase() {
 }
 
 /**
- * Create a CA firm for the currently authenticated user.
- * The database function assigns that user the managing_partner role.
+ * Creates a firm for the currently authenticated user.
+ * The database function assigns the user the managing_partner role.
  */
 export async function createFirm(name: string, city = '') {
   const client = requireSupabase();
 
+  const trimmedName = name.trim();
+
+  if (!trimmedName) {
+    throw new Error('Please enter your CA firm name.');
+  }
+
   const { data, error } = await client.rpc('create_firm_with_owner', {
-    p_name: name.trim(),
+    p_name: trimmedName,
     p_city: city.trim(),
   });
 
@@ -64,6 +72,9 @@ export async function createFirm(name: string, city = '') {
   return data as string;
 }
 
+/**
+ * Formats an amount in Indian rupees.
+ */
 export const money = (n: number) =>
   new Intl.NumberFormat('en-IN', {
     style: 'currency',
@@ -71,6 +82,9 @@ export const money = (n: number) =>
     maximumFractionDigits: 0,
   }).format(n);
 
+/**
+ * Formats a YYYY-MM-DD date for display in India.
+ */
 export const shortDate = (s: string) =>
   s
     ? new Date(${s}T00:00:00).toLocaleDateString('en-IN', {
