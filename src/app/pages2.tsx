@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
-import { useApp, sb, memberName, clientName, isPartnerRole, isReviewerRole, logMessage, myName } from './store';
+import { useApp, sb, memberName, clientName, isPartnerRole, isReviewerRole, logMessage, myName, inviteMember } from './store';
 import { useUI, Pill, Who, DueCell, Empty, Note, Icon, Opts, Tabs, BarChart, HBars, Bar, C } from './ui';
 import { useRun, useView, can, MsgTable, InvoiceTable } from './parts';
 import { Ph, Kpi, monthlyCompletion } from './pages1';
@@ -9,7 +9,7 @@ import {
 } from './modals';
 import { CATS, NOTICE_LABEL, RULE_STATUS_LABEL, INTEGRATIONS, PERMISSIONS, CHANNEL_LABEL, MSG_STATUS_LABEL, CLIENT_STATUS_LABEL, DOC_LABEL } from './constants';
 import {
-  isOpen, isOverdue, riskOf, dDiff, fmtD, fmtDs, inr, inrK, maskPan, taskNo, filingStage, downloadCsv, invoiceState, STATUS_LABEL,
+  isOpen, isOverdue, riskOf, dDiff, fmtD, fmtDs, fmtDT, inr, inrK, maskPan, taskNo, filingStage, downloadCsv, invoiceState, STATUS_LABEL, errMsg,
 } from './util';
 import type { Message, TeamMember, NoticeStatus, Settings } from './types';
 
@@ -93,6 +93,25 @@ export function staffLoad(d: ReturnType<typeof useApp>['d'], s: TeamMember) {
   const clients = new Set([...T.filter((t) => t.preparer_id === s.id || t.reviewer_id === s.id).map((t) => t.client_id), ...d.clients.filter((c) => c.partner_id === s.id).map((c) => c.id)]);
   return { prep, rev, od, clients: clients.size, util: (prep.length + rev.length) / s.capacity };
 }
+function LoginCell({ s, ed }: { s: TeamMember; ed: boolean }) {
+  const a = useApp(); const ui = useUI(); const [busy, setBusy] = useState(false);
+  if (s.user_id) return <Pill label="Signed in" cls="ok" nodot />;
+  const send = async () => {
+    setBusy(true);
+    try {
+      const res = await inviteMember(s.id);
+      ui.toast(res === 'linked' ? `${s.name} already had an account and can now sign in to this firm.` : `Invitation emailed to ${s.email}.`);
+    } catch (e) { ui.toast(errMsg(e), 'warn'); }
+    await a.reload().catch(() => undefined);
+    setBusy(false);
+  };
+  return (
+    <div className="row" style={{ flexWrap: 'nowrap' }}>
+      {s.invited_at ? <span title={`Invited ${fmtDT(s.invited_at)}`}><Pill label="Invited" cls="warn" nodot /></span> : <span className="faint small">No login</span>}
+      {ed && s.active && <button type="button" className="btn sm ghost" disabled={busy || !s.email} title={s.email ? undefined : 'Add an email first'} onClick={() => void send()}>{busy ? 'Sending…' : s.invited_at ? 'Resend invite' : 'Send invite'}</button>}
+    </div>
+  );
+}
 export function Team() {
   const a = useApp(); const ui = useUI();
   const f = ui.f('team', { role: '', util: '', show: 'active' });
@@ -106,7 +125,7 @@ export function Team() {
         {ed && <button type="button" className="btn" onClick={() => ui.openModal(<ReassignModal />)}>Reassign tasks</button>}
         {ed && <button type="button" className="btn pri" onClick={() => ui.openModal(<TeamMemberModal />)}><Icon n="plus" />Add team member</button>}
       </Ph>
-      {!a.d.team.some((m) => /Accountant|Article|Manager/.test(m.role)) && <Note>Add the people who prepare and review work. They don't need a login to be assigned tasks.</Note>}
+      {!a.d.team.some((m) => /Accountant|Article|Manager/.test(m.role)) && <Note>Add the people who prepare and review work. Tick "Email a login invitation" to let them sign in; people without a login can still be assigned tasks.</Note>}
       <div className="filters">
         <select className="inp" value={f.role} onChange={(e) => ui.setF('team', 'role', e.target.value)} aria-label="Role"><Opts list={roles} all="All roles" /></select>
         <select className="inp" value={f.util} onChange={(e) => ui.setF('team', 'util', e.target.value)} aria-label="Utilisation"><Opts list={[['over', 'Over 90% (overloaded)'], ['mid', '50–90%'], ['under', 'Under 50% (has capacity)']]} all="Any utilisation" /></select>
@@ -116,7 +135,7 @@ export function Team() {
         {rows.map(({ s, l }) => { const pct = Math.round(l.util * 100); return (
           <tr key={s.id}>
             <td><Who name={s.name} />{s.email && <div className="sub" style={{ marginLeft: 30 }}>{s.email}</div>}{!s.active && <div className="tiny faint" style={{ marginLeft: 30 }}>Inactive</div>}</td><td>{s.role}</td>
-            <td>{s.user_id ? <Pill label="Has login" cls="info" nodot /> : <span className="faint small">—</span>}</td>
+            <td><LoginCell s={s} ed={ed} /></td>
             <td className="r num">{l.clients}</td><td className="r num">{l.prep.length}</td><td className="r num" style={l.od.length ? { color: 'var(--bad)', fontWeight: 600 } : undefined}>{l.od.length}</td><td className="r num">{l.rev.length}</td>
             <td><div className="row" style={{ flexWrap: 'nowrap' }}><div className="grow"><Bar pct={pct} cls={pct > 90 ? 'bad' : pct > 70 ? 'warn' : 'ok'} /></div><span className="num tiny" style={{ width: 38, textAlign: 'right' }}>{pct}%</span></div></td>
             {ed && <td><div className="row" style={{ flexWrap: 'nowrap' }}><button type="button" className="btn sm ghost" onClick={() => ui.openModal(<TeamMemberModal m={s} />)}>Edit</button><button type="button" className="btn sm ghost" disabled={!l.prep.length} onClick={() => ui.openModal(<ReassignModal from={s.id} />)}>Reassign</button></div></td>}

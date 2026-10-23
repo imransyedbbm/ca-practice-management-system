@@ -10,6 +10,21 @@ export const supabaseKey = (
 ) as string | undefined;
 
 /**
+ * Error from an email link (expired or already used invitation / confirmation),
+ * read from the URL before the Supabase client processes and clears it.
+ */
+export const authLinkError: string | null = (() => {
+  if (typeof window === 'undefined') return null;
+  const p = new URLSearchParams(window.location.hash.replace(/^#/, '') || window.location.search);
+  const code = p.get('error_code') || p.get('error');
+  if (!code) return null;
+  window.history.replaceState(null, '', window.location.pathname);
+  return code === 'otp_expired'
+    ? 'That email link has expired or was already used. Ask a partner at your firm to resend the invitation, or sign in if you have already set a password.'
+    : p.get('error_description') || 'That email link could not be used.';
+})();
+
+/**
  * Supabase client.
  * Uses the public/publishable key and persists the signed-in session.
  */

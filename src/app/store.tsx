@@ -43,7 +43,7 @@ export const normTask = (r: Row): Task => {
     required_docs: arr(r.required_docs), filing: { ...DEFAULT_FILING, ...f }, created_at: s(r.created_at),
   };
 };
-const normTeam = (r: Row): TeamMember => ({ id: s(r.id), firm_id: s(r.firm_id), user_id: sn(r.user_id), name: s(r.name), role: s(r.role), email: s(r.email), capacity: Number(r.capacity || 16), active: r.active !== false });
+const normTeam = (r: Row): TeamMember => ({ id: s(r.id), firm_id: s(r.firm_id), user_id: sn(r.user_id), name: s(r.name), role: s(r.role), email: s(r.email), capacity: Number(r.capacity || 16), active: r.active !== false, invited_at: sn(r.invited_at) });
 const normDoc = (r: Row): Doc => ({ id: s(r.id), firm_id: s(r.firm_id), client_id: s(r.client_id), task_id: sn(r.task_id), name: s(r.name), fy: s(r.fy), status: (s(r.status) || 'requested') as Doc['status'], requested_on: sn(r.requested_on), uploaded_on: sn(r.uploaded_on), comment: s(r.comment), file_path: s(r.file_path), file_name: s(r.file_name), reviewed_by: s(r.reviewed_by), created_at: s(r.created_at) });
 const normMsg = (r: Row): Message => ({ id: s(r.id), firm_id: s(r.firm_id), client_id: sn(r.client_id), task_id: sn(r.task_id), channel: s(r.channel) as Channel, recipient: s(r.recipient), to_addr: s(r.to_addr), purpose: s(r.purpose), template: s(r.template), scheduled_at: sn(r.scheduled_at), status: s(r.status) as MsgStatus, read: !!r.read, body: s(r.body), recipient_member_id: sn(r.recipient_member_id), created_at: s(r.created_at) });
 const normNotice = (r: Row): Notice => ({ id: s(r.id), firm_id: s(r.firm_id), client_id: s(r.client_id), authority: s(r.authority), ref: s(r.ref), subject: s(r.subject), demand: Number(r.demand || 0), received_on: sn(r.received_on), response_due: sn(r.response_due), status: (s(r.status) || 'new') as Notice['status'], owner_id: sn(r.owner_id), doc_ref: s(r.doc_ref), created_at: s(r.created_at) });
@@ -206,6 +206,18 @@ export async function createFromOccurrences(a: AppCtx, client: Client, occ: Occu
     if (ae) throw ae;
   }
   return created.length;
+}
+
+/** Emails a team member a login invitation (or links their existing account). */
+export async function inviteMember(id: string): Promise<'invited' | 'linked'> {
+  const { data, error } = await sb().functions.invoke('invite-team-member', { body: { team_member_id: id, redirect_to: window.location.origin } });
+  if (error) {
+    let msg = error.message;
+    try { const j = await (error as { context?: Response }).context?.json(); if (j?.error) msg = String(j.error); } catch { /* not JSON */ }
+    if (/Failed to send a request/i.test(msg)) msg = 'The invite service is not available. Deploy the invite-team-member Edge Function.';
+    throw new Error(msg);
+  }
+  return (data as { status?: string } | null)?.status === 'linked' ? 'linked' : 'invited';
 }
 
 /** Signed link to a private file (valid for 5 minutes). */

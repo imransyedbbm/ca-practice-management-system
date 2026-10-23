@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import type { ChangeEvent, DragEvent } from 'react';
 import {
   useApp, sb, memberName, clientName, myName, isPartnerRole, isReviewerRole, addActivity, logMessage, pushInApp,
-  createFromOccurrences, normClient, uploadFile, mergeTemplate, patchTask, changeStatus,
+  createFromOccurrences, normClient, uploadFile, mergeTemplate, patchTask, changeStatus, inviteMember,
 } from './store';
 import { useUI, Modal, Field, Opts, Note, Icon, Empty, Pill } from './ui';
 import { useRun, can } from './parts';
@@ -473,28 +473,51 @@ export function RecordPaymentModal({ inv }: { inv: Invoice }) {
 export function TeamMemberModal({ m }: { m?: TeamMember }) {
   const a = useApp(); const ui = useUI(); const run = useRun();
   const [v, setV] = useState({ name: m?.name || '', role: m?.role || 'Accountant', email: m?.email || '', capacity: String(m?.capacity ?? 16), active: m?.active ?? true });
+  const [invite, setInvite] = useState(true); const [busy, setBusy] = useState(false);
+  const isMe = !!m?.user_id && m.user_id === a.uid;
   const save = async () => {
     if (!v.name.trim()) { ui.toast('Enter a name.', 'warn'); return; }
     if (v.email && !EMAIL_RE.test(v.email)) { ui.toast('Enter a valid email or leave it blank.', 'warn'); return; }
+    if (!m && invite && !v.email.trim()) { ui.toast('Enter an email to send a login invitation, or untick the invitation.', 'warn'); return; }
+    if (!m && v.email.trim() && a.d.team.some((x) => x.email.toLowerCase() === v.email.trim().toLowerCase())) { ui.toast('Someone in the team already uses that email.', 'warn'); return; }
     const cap = Math.round(Number(v.capacity));
     if (!(cap >= 1 && cap <= 100)) { ui.toast('Capacity must be between 1 and 100 tasks.', 'warn'); return; }
     const row = { name: v.name.trim(), role: v.role, email: v.email.trim(), capacity: cap, active: v.active };
-    const ok = await run(async () => {
-      const r = m ? await sb().from('team_members').update(row).eq('id', m.id) : await sb().from('team_members').insert({ ...row, firm_id: a.firm.id });
-      if (r.error) throw r.error;
-    }, m ? 'Team member updated.' : `${row.name} added to the team.`);
-    if (ok) ui.closeModal();
+    if (m) {
+      const ok = await run(async () => {
+        const r = await sb().from('team_members').update(row).eq('id', m.id);
+        if (r.error) throw r.error;
+      }, m.user_id ? 'Team member updated. Their login now has the same role and access.' : 'Team member updated.');
+      if (ok) ui.closeModal();
+      return;
+    }
+    setBusy(true);
+    const r = await sb().from('team_members').insert({ ...row, firm_id: a.firm.id }).select('id').single();
+    if (r.error) { setBusy(false); ui.toast(errMsg(r.error), 'warn'); return; }
+    ui.closeModal();
+    if (!invite) { await a.reload().catch(() => undefined); ui.toast(`${row.name} added to the team.`); return; }
+    try {
+      const res = await inviteMember(String(r.data.id));
+      ui.toast(res === 'linked' ? `${row.name} already had an account and can now sign in to this firm.` : `${row.name} added. An invitation was emailed to ${row.email}.`);
+    } catch (e) {
+      ui.toast(`${row.name} was added, but the invitation was not sent: ${errMsg(e)} Use Send invite on the Team page to try again.`, 'warn');
+    }
+    await a.reload().catch(() => undefined);
   };
   return (
-    <Modal title={m ? `Edit ${m.name}` : 'Add team member'} footer={<><button type="button" className="btn" onClick={ui.closeModal}>Cancel</button><button type="button" className="btn pri" onClick={save}>Save</button></>}>
+    <Modal title={m ? `Edit ${m.name}` : 'Add team member'} footer={<><button type="button" className="btn" onClick={ui.closeModal}>Cancel</button><button type="button" className="btn pri" disabled={busy} onClick={save}>{busy ? 'Saving…' : 'Save'}</button></>}>
       <div className="fg">
         <Field label="Full name" req full><input className="inp" value={v.name} onChange={(e) => setV({ ...v, name: e.target.value })} /></Field>
-        <Field label="Role"><select className="inp" value={v.role} onChange={(e) => setV({ ...v, role: e.target.value })}><Opts list={TEAM_ROLES} /></select></Field>
+        <Field label="Role"><select className="inp" value={v.role} disabled={isMe} onChange={(e) => setV({ ...v, role: e.target.value })}><Opts list={TEAM_ROLES} /></select></Field>
         <Field label="Weekly capacity (tasks)"><input className="inp" type="number" min={1} max={100} value={v.capacity} onChange={(e) => setV({ ...v, capacity: e.target.value })} /></Field>
-        <Field label="Email" full><input className="inp" type="email" value={v.email} onChange={(e) => setV({ ...v, email: e.target.value })} /></Field>
-        {m && <label className="chk full"><input type="checkbox" checked={v.active} onChange={(e) => setV({ ...v, active: e.target.checked })} />Active (inactive people are hidden from assignment lists)</label>}
+        <Field label="Email" full><input className="inp" type="email" value={v.email} disabled={!!m?.user_id} onChange={(e) => setV({ ...v, email: e.target.value })} /></Field>
+        {!m && <label className="chk full"><input type="checkbox" checked={invite} onChange={(e) => setInvite(e.target.checked)} />Email a login invitation (they set a password and join this firm with the role above)</label>}
+        {m && !isMe && <label className="chk full"><input type="checkbox" checked={v.active} onChange={(e) => setV({ ...v, active: e.target.checked })} />Active (inactive people are hidden from assignment lists{m.user_id ? ' and can no longer sign in to this firm' : ''})</label>}
       </div>
-      <div className="tiny muted" style={{ marginTop: 8 }}>Team members are people you assign work to. Giving someone a login is separate: they sign up and a partner adds them to the firm.</div>
+      <div className="tiny muted" style={{ marginTop: 8 }}>
+        {m?.user_id ? 'This person has a login. Their role and active status apply to it straight away.'
+          : 'Partners see everything including billing and settings; other roles get staff access. People without a login can still be assigned work.'}
+      </div>
     </Modal>
   );
 }

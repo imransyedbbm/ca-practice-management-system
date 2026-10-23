@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
-import { supabase, isSupabaseConfigured, createFirm } from './lib';
+import type { User } from '@supabase/supabase-js';
+import { supabase, isSupabaseConfigured, createFirm, authLinkError } from './lib';
 import { Ctx, EMPTY, loadFirmData, loadMemberships, loadPortalData, roleOf, sb, clientName } from './app/store';
 import type { AppCtx } from './app/store';
 import { UI, Icon, Modal, Pill, Empty, useUI } from './app/ui';
@@ -26,15 +27,21 @@ const PAGES: Record<string, () => ReactNode> = {
 };
 
 /* ================= Root: session & routing between screens ================= */
-type Phase = { k: 'loading' } | { k: 'signedout' } | { k: 'nofirm'; uid: string; email: string } | { k: 'error'; msg: string }
+type Phase = { k: 'loading' } | { k: 'signedout' } | { k: 'setpassword' } | { k: 'nofirm'; uid: string; email: string } | { k: 'error'; msg: string }
   | { k: 'staff'; uid: string; email: string; memberships: Membership[] } | { k: 'client'; uid: string; email: string };
 
 export default function App() {
   const [phase, setPhase] = useState<Phase>({ k: 'loading' });
-  const resolve = useCallback(async (uid: string | null, email: string) => {
-    if (!uid) { setPhase({ k: 'signedout' }); return; }
+  const resolve = useCallback(async (user: User | null) => {
+    if (!user) { setPhase({ k: 'signedout' }); return; }
+    const uid = user.id; const email = user.email ?? '';
+    // Invited team members arrive through the email link without a password.
+    if (user.user_metadata?.needs_password) { setPhase({ k: 'setpassword' }); return; }
     try {
-      await sb().rpc('claim_client_access').then(() => undefined, () => undefined);
+      await Promise.all([
+        sb().rpc('claim_team_invites').then(() => undefined, () => undefined),
+        sb().rpc('claim_client_access').then(() => undefined, () => undefined),
+      ]);
       const ms = await loadMemberships(uid);
       if (ms.length) { setPhase({ k: 'staff', uid, email, memberships: ms }); return; }
       const { data } = await sb().from('client_users').select('id').eq('user_id', uid).limit(1);
@@ -45,9 +52,9 @@ export default function App() {
   useEffect(() => {
     if (!supabase) return;
     let alive = true;
-    void supabase.auth.getSession().then(({ data }) => { if (alive) void resolve(data.session?.user.id ?? null, data.session?.user.email ?? ''); });
+    void supabase.auth.getSession().then(({ data }) => { if (alive) void resolve(data.session?.user ?? null); });
     const { data: sub } = supabase.auth.onAuthStateChange((ev, session) => {
-      if (ev === 'SIGNED_IN' || ev === 'SIGNED_OUT' || ev === 'USER_UPDATED') void resolve(session?.user.id ?? null, session?.user.email ?? '');
+      if (ev === 'SIGNED_IN' || ev === 'SIGNED_OUT' || ev === 'USER_UPDATED') void resolve(session?.user ?? null);
     });
     return () => { alive = false; sub.subscription.unsubscribe(); };
   }, [resolve]);
@@ -57,7 +64,8 @@ export default function App() {
   if (phase.k === 'loading') return <Centered><div className="row"><span className="spin" /> Loading…</div></Centered>;
   if (phase.k === 'error') return <Centered><h1>Something went wrong</h1><p className="muted">{phase.msg}</p><button type="button" className="btn" onClick={() => window.location.reload()}>Try again</button></Centered>;
   if (phase.k === 'signedout') return <AuthScreen />;
-  if (phase.k === 'nofirm') return <CreateFirmScreen email={phase.email} onDone={() => void resolve(phase.uid, phase.email)} />;
+  if (phase.k === 'setpassword') return <SetPasswordScreen />;
+  if (phase.k === 'nofirm') return <CreateFirmScreen email={phase.email} onDone={() => void sb().auth.getUser().then(({ data }) => resolve(data.user))} />;
   return <Workspace key={phase.uid} uid={phase.uid} email={phase.email} memberships={phase.k === 'staff' ? phase.memberships : []} portal={phase.k === 'client'} />;
 }
 
@@ -68,7 +76,7 @@ function Centered({ children }: { children: ReactNode }) {
 function AuthScreen() {
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [v, setV] = useState({ name: '', email: '', password: '' });
-  const [msg, setMsg] = useState<{ kind: 'bad' | 'ok'; text: string } | null>(null);
+  const [msg, setMsg] = useState<{ kind: 'bad' | 'ok'; text: string } | null>(authLinkError ? { kind: 'bad', text: authLinkError } : null);
   const [busy, setBusy] = useState(false);
   const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault(); setMsg(null);
@@ -102,6 +110,34 @@ function AuthScreen() {
   );
 }
 
+function SetPasswordScreen() {
+  const [v, setV] = useState({ password: '', confirm: '' }); const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
+  const [email, setEmail] = useState('');
+  useEffect(() => { void sb().auth.getUser().then(({ data }) => setEmail(data.user?.email ?? '')); }, []);
+  const submit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault(); setErr('');
+    if (v.password.length < 8) { setErr('Use a password of at least 8 characters.'); return; }
+    if (v.password !== v.confirm) { setErr('The two passwords do not match.'); return; }
+    setBusy(true);
+    // USER_UPDATED then moves the app on to the firm workspace.
+    const { error } = await sb().auth.updateUser({ password: v.password, data: { needs_password: false } });
+    if (error) { setErr(errMsg(error)); setBusy(false); }
+  };
+  return (
+    <Centered>
+      <h1>Set your password</h1>
+      <p className="small muted" style={{ marginTop: 0 }}>You were invited to join your firm on CAFlow{email ? <> as <b>{email}</b></> : null}. Choose a password to finish setting up your login.</p>
+      <form onSubmit={submit} className="auth-form">
+        <div className="fld"><label>New password</label><input className="inp" type="password" value={v.password} onChange={(e) => setV({ ...v, password: e.target.value })} autoComplete="new-password" required /></div>
+        <div className="fld"><label>Confirm password</label><input className="inp" type="password" value={v.confirm} onChange={(e) => setV({ ...v, confirm: e.target.value })} autoComplete="new-password" required /></div>
+        {err && <div className="note bad"><Icon n="alert" /><div>{err}</div></div>}
+        <button type="submit" className="btn pri" disabled={busy} style={{ justifyContent: 'center' }}>{busy ? 'Saving…' : 'Set password and continue'}</button>
+      </form>
+      <div className="row" style={{ marginTop: 12 }}><button type="button" className="btn sm ghost" onClick={() => void sb().auth.signOut()}>Sign out</button></div>
+    </Centered>
+  );
+}
+
 function CreateFirmScreen({ email, onDone }: { email: string; onDone: () => void }) {
   const [v, setV] = useState({ name: '', city: '' }); const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
   const submit = async (e: FormEvent<HTMLFormElement>) => {
@@ -115,6 +151,7 @@ function CreateFirmScreen({ email, onDone }: { email: string; onDone: () => void
     <Centered>
       <h1>Set up your firm</h1>
       <p className="small muted" style={{ marginTop: 0 }}>Signed in as {email}. Create your CA firm workspace; you become its managing partner.</p>
+      <div className="note"><Icon n="info" /><div>Joining an existing firm? Ask a partner there to add <b>{email}</b> on the Team page and send you an invitation, then reload this page.</div></div>
       <div className="note"><Icon n="info" /><div>Are you a client of a CA firm? Ask them to give <b>{email}</b> portal access, make sure your email is confirmed, then reload this page.</div></div>
       <form onSubmit={submit} className="auth-form">
         <div className="fld"><label>Firm name</label><input className="inp" value={v.name} onChange={(e) => setV({ ...v, name: e.target.value })} /></div>

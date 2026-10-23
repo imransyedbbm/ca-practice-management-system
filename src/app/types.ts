@@ -19,7 +19,7 @@ export interface Membership { firm_id: string; role: string; firm: Firm }
 
 export interface TeamMember {
   id: string; firm_id: string; user_id: string | null; name: string; role: string;
-  email: string; capacity: number; active: boolean;
+  email: string; capacity: number; active: boolean; invited_at: string | null;
 }
 
 export interface Client {

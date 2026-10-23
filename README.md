@@ -30,6 +30,13 @@ Run these in the Supabase SQL Editor, in order (each is safe to re-run):
 
 1. `supabase/migrations/0004_match_live_database.sql`
 2. `supabase/migrations/0005_practice_modules.sql`
+3. `supabase/migrations/0006_team_invites.sql`
+
+Then deploy the team invitation function (Supabase CLI, once per change):
+
+```bash
+supabase functions deploy invite-team-member
+```
 
 `supabase/archive/` holds early drafts that do not match the live database; do not run them.
 
@@ -39,7 +46,13 @@ Access is enforced by row-level security:
 - **Staff** work on clients, tasks, filings, documents, notices and messages, but cannot see invoices or change settings, rules, team or portal access.
 - **Client users** see only the client company their email was given access to.
 
+## Team logins
+
+**Team & Workload → Add team member** can email the person a login invitation (ticked by default). They click the link, set a password and land in your firm with the role you chose. The Team page shows each person's login status (Signed in, Invited, No login) with a Send / Resend invite button. If an invited person signs up on their own with the same email instead, they join the firm once their email is confirmed. Changing a person's role or marking them inactive applies to their login straight away.
+
 ## Supabase auth settings (important)
+
+- **Connect a real email service.** Supabase's built-in mailer only sends to members of your Supabase organisation and only a few emails an hour, so invitations and confirmations to anyone else never arrive. Under **Authentication → Emails → SMTP settings**, connect a provider such as Resend, Brevo, Amazon SES or ZeptoMail, sending from your own domain with SPF and DKIM set up. Then raise **Authentication → Rate limits → emails per hour**.
 
 - Keep **Authentication → Sign In / Providers → Email → Confirm email** turned **on**. Client portal access is linked by email address, and only confirmed emails can claim it.
 - Set **Authentication → URL Configuration → Site URL** to the Vercel address and add it (plus `https://*-<team>.vercel.app/**` for previews) under Redirect URLs.
