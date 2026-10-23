@@ -31,6 +31,7 @@ Run these in the Supabase SQL Editor, in order (each is safe to re-run):
 1. `supabase/migrations/0004_match_live_database.sql`
 2. `supabase/migrations/0005_practice_modules.sql`
 3. `supabase/migrations/0006_team_invites.sql`
+4. `supabase/migrations/0007_team_email_unique.sql`
 
 Then deploy the team invitation function (Supabase CLI, once per change):
 

@@ -55,6 +55,14 @@ Deno.serve(async (req) => {
   const email = String(tm.email ?? '').trim();
   if (!EMAIL_RE.test(email)) return reply(400, { error: `Add a valid email address for ${tm.name} first.` });
 
+  // Nobody else in the firm (active or not, the caller included) may already use this email.
+  const { data: others, error: oErr } = await admin.from('team_members')
+    .select('id, email').eq('firm_id', tm.firm_id).neq('id', tm.id);
+  if (oErr) return reply(500, { error: oErr.message });
+  if ((others ?? []).some((o) => String(o.email ?? '').trim().toLowerCase() === email.toLowerCase())) {
+    return reply(409, { error: 'Someone in this firm already uses that email.' });
+  }
+
   const markInvited = () => admin.from('team_members').update({ invited_at: new Date().toISOString() }).eq('id', tm.id);
 
   const { error: invErr } = await admin.auth.admin.inviteUserByEmail(email, {

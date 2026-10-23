@@ -470,6 +470,10 @@ export function RecordPaymentModal({ inv }: { inv: Invoice }) {
 }
 
 /* ================= Team ================= */
+const DUP_EMAIL = 'Someone in this firm already uses that email.';
+/** True for the unique-index error from 0007 (two active team members with one email). */
+const isDupEmail = (e: unknown) => { const x = e as { code?: string; message?: string } | null; return x?.code === '23505' && !!x.message?.includes('team_members_firm_email_uniq'); };
+
 export function TeamMemberModal({ m }: { m?: TeamMember }) {
   const a = useApp(); const ui = useUI(); const run = useRun();
   const [v, setV] = useState({ name: m?.name || '', role: m?.role || 'Accountant', email: m?.email || '', capacity: String(m?.capacity ?? 16), active: m?.active ?? true });
@@ -479,21 +483,22 @@ export function TeamMemberModal({ m }: { m?: TeamMember }) {
     if (!v.name.trim()) { ui.toast('Enter a name.', 'warn'); return; }
     if (v.email && !EMAIL_RE.test(v.email)) { ui.toast('Enter a valid email or leave it blank.', 'warn'); return; }
     if (!m && invite && !v.email.trim()) { ui.toast('Enter an email to send a login invitation, or untick the invitation.', 'warn'); return; }
-    if (!m && v.email.trim() && a.d.team.some((x) => x.email.toLowerCase() === v.email.trim().toLowerCase())) { ui.toast('Someone in the team already uses that email.', 'warn'); return; }
+    const email = v.email.trim().toLowerCase();
+    if (email && a.d.team.some((x) => x.id !== m?.id && x.email.trim().toLowerCase() === email)) { ui.toast(DUP_EMAIL, 'warn'); return; }
     const cap = Math.round(Number(v.capacity));
     if (!(cap >= 1 && cap <= 100)) { ui.toast('Capacity must be between 1 and 100 tasks.', 'warn'); return; }
     const row = { name: v.name.trim(), role: v.role, email: v.email.trim(), capacity: cap, active: v.active };
     if (m) {
       const ok = await run(async () => {
         const r = await sb().from('team_members').update(row).eq('id', m.id);
-        if (r.error) throw r.error;
+        if (r.error) throw isDupEmail(r.error) ? new Error(DUP_EMAIL) : r.error;
       }, m.user_id ? 'Team member updated. Their login now has the same role and access.' : 'Team member updated.');
       if (ok) ui.closeModal();
       return;
     }
     setBusy(true);
     const r = await sb().from('team_members').insert({ ...row, firm_id: a.firm.id }).select('id').single();
-    if (r.error) { setBusy(false); ui.toast(errMsg(r.error), 'warn'); return; }
+    if (r.error) { setBusy(false); ui.toast(isDupEmail(r.error) ? DUP_EMAIL : errMsg(r.error), 'warn'); return; }
     ui.closeModal();
     if (!invite) { await a.reload().catch(() => undefined); ui.toast(`${row.name} added to the team.`); return; }
     try {
