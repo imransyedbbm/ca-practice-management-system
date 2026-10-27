@@ -167,7 +167,7 @@ export async function changeStatus(a: AppCtx, t: Task, to: StatusKey, note?: str
   if (to === 'prepared' && handoff) {
     final = 'under_review';
     await patchTask(t, { status: final });
-    await addActivity(a, t, `Moved to Under Review by rule "${handoff.name}"`, 'CAFlow automation');
+    await addActivity(a, t, `Moved to Under Review by rule "${handoff.name}"`, 'Anupal automation');
     await pushInApp(a, t.reviewer_id, t, 'Review request', `${memberName(a.d, t.preparer_id)} submitted ${t.title} (${clientName(a.d, t.client_id)}) for review.`);
     msg = `Rule "${handoff.name}" moved it to Under Review and alerted ${memberName(a.d, t.reviewer_id)}.`;
   }
@@ -200,7 +200,7 @@ export async function createFromOccurrences(a: AppCtx, client: Client, occ: Occu
   const created = ((data as Row[] | null) || []).map(normTask);
   if (created.length) {
     const { error: ae } = await sb().from('task_activity').insert(created.map((t) => ({
-      firm_id: t.firm_id, task_id: t.id, actor_name: manual ? myName(a) : 'CAFlow automation',
+      firm_id: t.firm_id, task_id: t.id, actor_name: manual ? myName(a) : 'Anupal automation',
       text: manual ? 'Task created manually' : 'Task generated from client services',
     })));
     if (ae) throw ae;

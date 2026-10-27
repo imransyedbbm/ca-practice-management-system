@@ -69,8 +69,45 @@ export default function App() {
   return <Workspace key={phase.uid} uid={phase.uid} email={phase.email} memberships={phase.k === 'staff' ? phase.memberships : []} portal={phase.k === 'client'} />;
 }
 
+/** Anupal mark: an open checkbox with a tick that runs out of it. */
+export function BrandMark({ size = 28 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 64 64" aria-hidden="true" focusable="false" style={{ flex: 'none', display: 'block' }}>
+      <rect width="64" height="64" rx="15" fill="#2348D8" />
+      <path d="M37 17H21a4 4 0 0 0-4 4v22a4 4 0 0 0 4 4h22a4 4 0 0 0 4-4V35" fill="none" stroke="#fff" strokeWidth="4.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M24 31.5l7.5 7.5L50 15" fill="none" stroke="#5EE6B8" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+const AUTH_POINTS: [string, string][] = [
+  ['Every deadline in one calendar', 'GST, income tax, TDS and ROC dates for every client, with internal targets and owners.'],
+  ['Review before anything is filed', 'Preparer, reviewer and partner sign-off, then acknowledgement and evidence on record.'],
+  ['A secure portal for your clients', 'Clients upload documents and track filings. Each firm sees only its own data.'],
+];
+
 function Centered({ children }: { children: ReactNode }) {
-  return <div className="auth-wrap"><div className="auth-card"><div className="brand-row"><div className="brand-mark">CA</div><div><div className="strong">CAFlow India</div><div className="tiny muted">Practice management</div></div></div>{children}</div></div>;
+  return (
+    <div className="auth-split">
+      <aside className="auth-hero" aria-label="About Anupal">
+        <div className="auth-logo"><BrandMark size={44} /><span>Anupal</span></div>
+        <div className="auth-pitch">
+          <div className="auth-eyebrow">Practice management for CA firms</div>
+          <h2>One workspace for your clients, compliance and team.</h2>
+          <p>Track statutory deadlines, run every return through review, and keep filing evidence on record, from one secure workspace.</p>
+          <ul className="auth-points">{AUTH_POINTS.map(([t, d]) => (
+            <li key={t}><span className="auth-tick" aria-hidden="true"><svg viewBox="0 0 16 16" width="16" height="16"><path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg></span><div><b>{t}</b><span>{d}</span></div></li>
+          ))}</ul>
+        </div>
+        <div className="auth-foot">Anupal · Made for Indian chartered accountants</div>
+      </aside>
+      <main className="auth-side">
+        <div className="auth-logo auth-logo-sm"><BrandMark size={34} /><span>Anupal</span></div>
+        <div className="auth-card">{children}</div>
+        <div className="auth-legal">Each firm's data is kept separate and checked on every request.</div>
+      </main>
+    </div>
+  );
 }
 
 function AuthScreen() {
@@ -96,16 +133,16 @@ function AuthScreen() {
   };
   return (
     <Centered>
-      <h1>{mode === 'signin' ? 'Sign in' : 'Create your account'}</h1>
-      <p className="small muted" style={{ marginTop: 0 }}>For CA firm teams and their clients. Clients: use the email your CA gave portal access to.</p>
+      <h1>{mode === 'signin' ? 'Welcome back' : 'Create your account'}</h1>
+      <p className="small muted" style={{ marginTop: 0 }}>{mode === 'signin' ? 'Sign in to continue to your practice workspace.' : 'Start a workspace for your CA firm. Clients: use the email your CA gave portal access to.'}</p>
       <form onSubmit={submit} className="auth-form">
         {mode === 'signup' && <div className="fld"><label>Full name</label><input className="inp" value={v.name} onChange={(e) => setV({ ...v, name: e.target.value })} autoComplete="name" /></div>}
-        <div className="fld"><label>Email</label><input className="inp" type="email" value={v.email} onChange={(e) => setV({ ...v, email: e.target.value })} autoComplete="email" required /></div>
+        <div className="fld"><label>Email address</label><input className="inp" type="email" value={v.email} onChange={(e) => setV({ ...v, email: e.target.value })} autoComplete="email" required /></div>
         <div className="fld"><label>Password</label><input className="inp" type="password" value={v.password} onChange={(e) => setV({ ...v, password: e.target.value })} autoComplete={mode === 'signin' ? 'current-password' : 'new-password'} required /></div>
         {msg && <div className={`note ${msg.kind === 'bad' ? 'bad' : ''}`}><Icon n={msg.kind === 'bad' ? 'alert' : 'info'} /><div>{msg.text}</div></div>}
         <button type="submit" className="btn pri" disabled={busy} style={{ justifyContent: 'center' }}>{busy ? 'Please wait…' : mode === 'signin' ? 'Sign in' : 'Create account'}</button>
       </form>
-      <div className="small" style={{ marginTop: 12 }}>{mode === 'signin' ? <>New here? <button type="button" className="linkbtn" onClick={() => { setMode('signup'); setMsg(null); }}>Create an account</button></> : <>Already registered? <button type="button" className="linkbtn" onClick={() => { setMode('signin'); setMsg(null); }}>Sign in</button></>}</div>
+      <div className="small auth-switch">{mode === 'signin' ? <>Don't have an account? <button type="button" className="linkbtn" onClick={() => { setMode('signup'); setMsg(null); }}>Create account</button></> : <>Already registered? <button type="button" className="linkbtn" onClick={() => { setMode('signin'); setMsg(null); }}>Sign in</button></>}</div>
     </Centered>
   );
 }
@@ -126,7 +163,7 @@ function SetPasswordScreen() {
   return (
     <Centered>
       <h1>Set your password</h1>
-      <p className="small muted" style={{ marginTop: 0 }}>You were invited to join your firm on CAFlow{email ? <> as <b>{email}</b></> : null}. Choose a password to finish setting up your login.</p>
+      <p className="small muted" style={{ marginTop: 0 }}>You were invited to join your firm on Anupal{email ? <> as <b>{email}</b></> : null}. Choose a password to finish setting up your login.</p>
       <form onSubmit={submit} className="auth-form">
         <div className="fld"><label>New password</label><input className="inp" type="password" value={v.password} onChange={(e) => setV({ ...v, password: e.target.value })} autoComplete="new-password" required /></div>
         <div className="fld"><label>Confirm password</label><input className="inp" type="password" value={v.confirm} onChange={(e) => setV({ ...v, confirm: e.target.value })} autoComplete="new-password" required /></div>
@@ -248,7 +285,7 @@ function Workspace({ uid, email, memberships, portal }: { uid: string; email: st
     <Ctx.Provider value={app}><UI.Provider value={ui}>
       <div className="app">
         <aside className={`side ${sideOpen ? 'open' : ''}`} aria-label="Main navigation">
-          <div className="brand"><div className="brand-mark">CA</div><div><div className="brand-name">CAFlow India</div><div className="brand-sub">{d.settings?.short_code || initials(firm.name)}{firm.city ? ` · ${firm.city}` : ''}</div></div></div>
+          <div className="brand"><BrandMark size={30} /><div><div className="brand-name">Anupal</div><div className="brand-sub">{d.settings?.short_code || initials(firm.name)}{firm.city ? ` · ${firm.city}` : ''}</div></div></div>
           <nav className="nav">{NAV.map(([sec, items]) => { const vis = items.filter((i) => i[3].includes(roleKey(role))); if (!vis.length) return null; return (
             <div key={sec}><div className="nav-sec">{sec}</div>{vis.map(([id, l, ic]) => (
               <button type="button" key={id} className={cur === id ? 'on' : ''} aria-current={cur === id ? 'page' : undefined} onClick={() => ui.go(id)}>

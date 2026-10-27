@@ -638,13 +638,13 @@ export function useRuleTargets() {
     if (r.kind === 'escalate') return T.filter(isOverdue).filter((t) => t.priority !== 'critical')
       .map((t) => ({ label: `Escalate ${taskNo(t)} to ${memberName(a.d, t.reviewer_id)} and set priority to Critical`, apply: async () => {
         await patchTask(t, { priority: 'critical' });
-        await addActivity(a, t, 'Overdue: escalated to reviewer by rule', 'CAFlow automation');
+        await addActivity(a, t, 'Overdue: escalated to reviewer by rule', 'Anupal automation');
         await pushInApp(a, t.reviewer_id, t, 'Overdue escalation', `${t.title} for ${clientName(a.d, t.client_id)} is overdue.`);
       } }));
     if (r.kind === 'review') return a.d.tasks.filter((t) => t.status === 'prepared')
       .map((t) => ({ label: `Move ${taskNo(t)} to Under Review and notify ${memberName(a.d, t.reviewer_id)}`, apply: async () => {
         await patchTask(t, { status: 'under_review' });
-        await addActivity(a, t, 'Moved to Under Review by rule', 'CAFlow automation');
+        await addActivity(a, t, 'Moved to Under Review by rule', 'Anupal automation');
         await pushInApp(a, t.reviewer_id, t, 'Review request', `${t.title} is ready for your review.`);
       } }));
     if (r.kind === 'evidence') return a.d.tasks.filter((t) => (t.status === 'filed' || t.status === 'evidence_pending') && t.filing.evidence === 'awaiting_upload')

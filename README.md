@@ -1,4 +1,4 @@
-# CAFlow India: CA practice management
+# Anupal: practice management for CA firms
 
 React + TypeScript + Vite front end with a Supabase (PostgreSQL) back end. Deployed on Vercel.
 
