@@ -12,18 +12,26 @@ import { Dashboard, Clients, ClientDetail, Calendar, Tasks, Filings, Documents }
 import { Notices, Notifications, Team, Reports, Billing, Rules, Integrations, SettingsPage, SearchResults } from './app/pages2';
 import { TaskDrawer, FilingDrawer, RuleDrawer } from './app/drawers';
 import { ViewMsgModal } from './app/modals';
+import { FoIntro, FoOverview, FoPfEsi, FoRules } from './app/finops/pages';
+import { FoPeriodPage } from './app/finops/period';
 
 type NavItem = [id: string, label: string, icon: string, roles: string];
 const NAV: [string, NavItem[]][] = [
   ['Practice', [['dashboard', 'Dashboard', 'home', 'pac'], ['clients', 'Clients', 'users', 'pa'], ['calendar', 'Compliance Calendar', 'cal', 'pac'], ['tasks', 'Tasks & Workflows', 'tasks', 'pa'], ['filings', 'Regulatory Filings', 'file', 'pac'], ['documents', 'Documents', 'folder', 'pac'], ['notices', 'Notices & Assessments', 'alert', 'pa'], ['notifications', 'Notifications', 'bell', 'pac']]],
   ['Firm', [['team', 'Team & Workload', 'team', 'pa'], ['reports', 'Reports', 'chart', 'p'], ['billing', 'Billing', 'bill', 'pc'], ['rules', 'Compliance Rules', 'book', 'pa'], ['integrations', 'Integrations', 'plug', 'p'], ['settings', 'Settings', 'cog', 'pa']]],
 ];
+/* Paid add-ons: shown only when the firm has switched them on (Settings → Add-ons). */
+const FO_NAV: [string, NavItem[]] = ['Financial Ops', [['fo-overview', 'Control Tower', 'chart', 'pa'], ['fo-pfesi', 'PF & ESI', 'bill', 'pa'], ['fo-rules', 'Contribution Rules', 'book', 'pa']]];
+const FO_INTRO: [string, NavItem[]] = ['Add-ons', [['fo-intro', 'Financial Ops', 'plus', 'p']]];
+const navFor = (foOn: boolean) => [...NAV.slice(0, 1), foOn ? FO_NAV : FO_INTRO, ...NAV.slice(1)];
 const roleKey = (r: Role) => ({ partner: 'p', accountant: 'a', client: 'c' })[r];
-const allowed = (page: string, r: Role) => (page === 'client' ? r !== 'client' : NAV.some(([, items]) => items.some((i) => i[0] === page && i[3].includes(roleKey(r)))));
+const allowed = (page: string, r: Role, foOn: boolean) => (page === 'client' ? r !== 'client' : page === 'fo-period' ? foOn && r !== 'client'
+  : navFor(foOn).some(([, items]) => items.some((i) => i[0] === page && i[3].includes(roleKey(r)))));
 const PAGES: Record<string, () => ReactNode> = {
   dashboard: () => <Dashboard />, clients: () => <Clients />, client: () => <ClientDetail />, calendar: () => <Calendar />, tasks: () => <Tasks />,
   filings: () => <Filings />, documents: () => <Documents />, notices: () => <Notices />, notifications: () => <Notifications />, team: () => <Team />,
   reports: () => <Reports />, billing: () => <Billing />, rules: () => <Rules />, integrations: () => <Integrations />, settings: () => <SettingsPage />,
+  'fo-intro': () => <FoIntro />, 'fo-overview': () => <FoOverview />, 'fo-pfesi': () => <FoPfEsi />, 'fo-rules': () => <FoRules />, 'fo-period': () => <FoPeriodPage />,
 };
 
 /* ================= Root: session & routing between screens ================= */
@@ -231,6 +239,7 @@ function Workspace({ uid, email, memberships, portal }: { uid: string; email: st
     portalClientId, setPortalClientId,
   };
 
+  const foOn = !portal && d.fo.enabled;
   /* UI state */
   const [page, setPage] = useState('dashboard'); const [params, setParams] = useState<Record<string, string>>({});
   const [drawer, setDrawer] = useState<{ kind: string; id: string } | null>(null);
@@ -245,7 +254,7 @@ function Workspace({ uid, email, memberships, portal }: { uid: string; email: st
   }, []);
   const ui: UICtx = {
     page, params,
-    go: (p, prm) => { if (!allowed(p, role)) { toast('Your role cannot open that page.', 'warn'); return; } setPage(p); setParams(prm || {}); setSearch(''); setSideOpen(false); setPop(''); document.querySelector('.content')?.scrollTo(0, 0); },
+    go: (p, prm) => { if (!allowed(p, role, foOn)) { toast('Your role cannot open that page.', 'warn'); return; } setPage(p); setParams(prm || {}); setSearch(''); setSideOpen(false); setPop(''); document.querySelector('.content')?.scrollTo(0, 0); },
     drawer, openDrawer: (kind, id) => setDrawer({ kind, id }), closeDrawer: () => setDrawer(null),
     modal, openModal: (n) => setModal(n), closeModal: () => setModal(null), toast,
     f: (p, defs = {}) => ({ ...defs, ...(filters[p] || {}) }),
@@ -257,7 +266,7 @@ function Workspace({ uid, email, memberships, portal }: { uid: string; email: st
     const h = (e: KeyboardEvent) => { if (e.key !== 'Escape') return; if (modal) setModal(null); else if (drawer) setDrawer(null); else setPop(''); };
     document.addEventListener('keydown', h); return () => document.removeEventListener('keydown', h);
   }, [modal, drawer]);
-  useEffect(() => { if (!allowed(page, role)) setPage('dashboard'); }, [role, page]);
+  useEffect(() => { if (state === 'ready' && !allowed(page, role, foOn)) setPage(page === 'fo-intro' && foOn ? 'fo-overview' : page.startsWith('fo-') && !foOn && role === 'partner' ? 'fo-intro' : 'dashboard'); }, [role, page, foOn, state]);
 
   const fys = useMemo(() => [...new Set(d.tasks.map((t) => t.fy).filter(Boolean))].sort().reverse(), [d.tasks]);
   const myInApp = d.msgs.filter((m) => m.channel === 'in_app' && (role === 'partner' || !me || m.recipient_member_id === me.id));
@@ -273,7 +282,7 @@ function Workspace({ uid, email, memberships, portal }: { uid: string; email: st
   };
   const myName = me?.name || email.split('@')[0];
   const roleLabel = role === 'partner' ? 'Partner' : role === 'accountant' ? 'Staff' : 'Client user';
-  const cur = page === 'client' ? 'clients' : page;
+  const cur = page === 'client' ? 'clients' : page === 'fo-period' ? 'fo-pfesi' : page;
 
   let content: ReactNode;
   if (state === 'loading') content = <div className="card"><div className="card-b">{Array.from({ length: 6 }).map((_, i) => <div className="skel" key={i} style={{ margin: '10px 0' }} />)}</div></div>;
@@ -286,7 +295,7 @@ function Workspace({ uid, email, memberships, portal }: { uid: string; email: st
       <div className="app">
         <aside className={`side ${sideOpen ? 'open' : ''}`} aria-label="Main navigation">
           <div className="brand"><BrandMark size={30} /><div><div className="brand-name">Anupal</div><div className="brand-sub">{d.settings?.short_code || initials(firm.name)}{firm.city ? ` · ${firm.city}` : ''}</div></div></div>
-          <nav className="nav">{NAV.map(([sec, items]) => { const vis = items.filter((i) => i[3].includes(roleKey(role))); if (!vis.length) return null; return (
+          <nav className="nav">{navFor(foOn).map(([sec, items]) => { const vis = items.filter((i) => i[3].includes(roleKey(role))); if (!vis.length) return null; return (
             <div key={sec}><div className="nav-sec">{sec}</div>{vis.map(([id, l, ic]) => (
               <button type="button" key={id} className={cur === id ? 'on' : ''} aria-current={cur === id ? 'page' : undefined} onClick={() => ui.go(id)}>
                 <Icon n={ic} /><span>{role === 'client' && id === 'dashboard' ? 'My compliance' : l}</span>{badge(id)}

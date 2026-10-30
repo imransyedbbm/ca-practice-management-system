@@ -6,6 +6,7 @@ import type {
 } from './types';
 import { si, todayISO, dDiff, fmtD, STATUS_LABEL } from './util';
 import type { Occurrence } from './obligations';
+import { loadFo, FO_EMPTY } from './finops/store';
 
 export const sb = () => {
   if (!supabase) throw new Error('Supabase is not configured.');
@@ -14,7 +15,7 @@ export const sb = () => {
 
 export const EMPTY: FirmData = {
   team: [], clients: [], tasks: [], docs: [], msgs: [], notices: [], invoices: [], rules: [], crules: [],
-  settings: null, activity: [], comments: [], clientUsers: [],
+  settings: null, activity: [], comments: [], clientUsers: [], fo: FO_EMPTY,
 };
 
 const DEFAULT_FILING: Filing = { method: 'Assisted', ack: '', submitted_on: '', evidence: 'not_due', evidence_path: '', evidence_name: '', ev_rejected: '' };
@@ -61,7 +62,7 @@ async function q<T>(p: PromiseLike<{ data: unknown; error: unknown }>, norm: (r:
 /** Everything a firm member sees for one firm. */
 export async function loadFirmData(firmId: string, partner: boolean): Promise<FirmData> {
   const c = sb();
-  const [team, clients, tasks, docs, msgs, notices, invoices, rules, crules, settingsRows, activity, comments, clientUsers] = await Promise.all([
+  const [team, clients, tasks, docs, msgs, notices, invoices, rules, crules, settingsRows, activity, comments, clientUsers, fo] = await Promise.all([
     q(c.from('team_members').select('*').eq('firm_id', firmId).order('name'), normTeam),
     q(c.from('clients').select('*').eq('firm_id', firmId).order('name'), normClient),
     q(c.from('compliance_tasks').select('*').eq('firm_id', firmId).order('due_date', { ascending: true }), normTask),
@@ -75,8 +76,10 @@ export async function loadFirmData(firmId: string, partner: boolean): Promise<Fi
     q(c.from('task_activity').select('*').eq('firm_id', firmId).order('created_at', { ascending: false }).limit(1500), (r: Row): Activity => ({ id: s(r.id), firm_id: s(r.firm_id), task_id: s(r.task_id), actor_name: s(r.actor_name), text: s(r.text), created_at: s(r.created_at) })),
     q(c.from('task_comments').select('*').eq('firm_id', firmId).order('created_at', { ascending: true }), (r: Row): Comment => ({ id: s(r.id), firm_id: s(r.firm_id), task_id: s(r.task_id), author_name: s(r.author_name), body: s(r.body), created_at: s(r.created_at) })),
     partner ? q(c.from('client_users').select('*').eq('firm_id', firmId).order('created_at'), (r: Row): ClientUser => ({ id: s(r.id), firm_id: s(r.firm_id), client_id: s(r.client_id), email: s(r.email), user_id: sn(r.user_id), invited_by: s(r.invited_by), accepted_at: sn(r.accepted_at), created_at: s(r.created_at) })) : Promise.resolve([] as ClientUser[]),
+    // An add-on problem must not stop the rest of the practice from loading.
+    loadFo(firmId).catch((e) => { console.warn('Financial Operations did not load', e); return FO_EMPTY; }),
   ]);
-  return { team, clients, tasks, docs, msgs, notices, invoices, rules, crules, settings: settingsRows[0] || null, activity, comments, clientUsers };
+  return { team, clients, tasks, docs, msgs, notices, invoices, rules, crules, settings: settingsRows[0] || null, activity, comments, clientUsers, fo };
 }
 
 /** Everything a client portal user may see (row-level security limits it to their own company). */

@@ -24,6 +24,21 @@ React + TypeScript + Vite front end with a Supabase (PostgreSQL) back end. Deplo
 
 Due dates are generated from standard patterns (for example GSTR-3B on the 20th of the following month). They ignore extensions, QRMP and special notifications, so they **must be checked against official sources**.
 
+## Financial Operations add-on (PF & ESI)
+
+A paid add-on a partner switches on per firm (Settings → Add-ons, or the **Financial Ops** item under Add-ons in the menu). While it is off, its menu section is hidden and the database refuses access to its records.
+
+- **Control Tower:** every client's PF and ESI obligation for a wage month, with status, due date, owner, risk and a "needs attention first" list. Filters: month, scheme, status, client, person, risk.
+- **PF & ESI:** client setup (applicability, registration codes, payroll contact, preparer, reviewer, due days), verified by a manager or partner; obligations per wage month; an append-only audit trail.
+- **Obligation page:** upload the payroll as CSV (columns are matched automatically and can be changed), check it for missing or duplicate references, bad numbers and wages above gross, calculate under an approved rule version or use the file's own figures, then send it for review. The person who prepared the calculation cannot review it. Each calculation is kept as a version that cannot be edited.
+- **Contribution rules:** rates, wage ceiling, eligibility limit and rounding as numbered versions. Nothing is pre-filled: enter values from the official EPFO / ESIC notification, cite it, and a partner approves. Approved versions cannot be edited.
+
+Setup: run `supabase/migrations/0008_financial_operations.sql` in the Supabase SQL Editor (safe to run again). A sample file with fictional data is at `/samples/sample-payroll.csv`.
+
+Privacy: the original payroll file is not stored. Only the mapped figures are saved, with employee references cut to their last four characters, plus a fingerprint of the file so the same file cannot be imported twice.
+
+Not in this phase: payment requests, client approvals, challans, bank reconciliation, GST/TDS payments, collections. Excel files must be saved as CSV first.
+
 ## Database
 
 Run these in the Supabase SQL Editor, in order (each is safe to re-run):

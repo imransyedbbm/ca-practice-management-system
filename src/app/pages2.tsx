@@ -12,6 +12,7 @@ import {
   isOpen, isOverdue, riskOf, dDiff, fmtD, fmtDs, fmtDT, inr, inrK, maskPan, taskNo, filingStage, downloadCsv, invoiceState, STATUS_LABEL, errMsg,
 } from './util';
 import type { Message, TeamMember, NoticeStatus, Settings } from './types';
+import { AddonsTab } from './finops/pages';
 
 /* ================= Notices ================= */
 export function Notices() {
@@ -300,7 +301,7 @@ export function SettingsPage() {
   const st: Settings | null = a.d.settings;
   const [firm, setFirm] = useState({ name: a.firm.name, city: a.firm.city, short: st?.short_code || '' });
   const [esc, setEsc] = useState({ remind: String(st?.escalation.remind ?? 3), escalate: String(st?.escalation.escalate ?? 1), partner: String(st?.escalation.partner ?? 3), critical: st?.escalation.critical ?? true });
-  const tabs: [string, string][] = ed ? [['firm', 'Firm profile'], ['perm', 'Permissions'], ['notif', 'Notification preferences'], ['esc', 'Escalation policies']] : [['notif', 'Notification preferences'], ['perm', 'Permissions']];
+  const tabs: [string, string][] = ed ? [['firm', 'Firm profile'], ['perm', 'Permissions'], ['notif', 'Notification preferences'], ['esc', 'Escalation policies'], ['addons', 'Add-ons']] : [['notif', 'Notification preferences'], ['perm', 'Permissions'], ['addons', 'Add-ons']];
   let body: ReactNode = null;
   if (f.tab === 'firm') body = (
     <div className="fg card card-b" style={{ padding: 16 }}>
@@ -315,6 +316,7 @@ export function SettingsPage() {
         }, 'Firm profile saved.');
       }}>Save profile</button></div>
     </div>);
+  if (f.tab === 'addons') body = <AddonsTab />;
   if (f.tab === 'perm') body = (
     <><Note kind="warn">These rules are enforced by the database for each request and each firm.</Note>
       <div className="card"><div className="tw"><table className="t"><thead><tr><th>Permission</th><th>Partner</th><th>Staff</th><th>Client user</th></tr></thead><tbody>

@@ -1,3 +1,5 @@
+import type { FoData } from './finops/store';
+
 export type Role = 'partner' | 'accountant' | 'client';
 
 export type StatusKey =
@@ -99,4 +101,6 @@ export interface FirmData {
   team: TeamMember[]; clients: Client[]; tasks: Task[]; docs: Doc[]; msgs: Message[];
   notices: Notice[]; invoices: Invoice[]; rules: AutoRule[]; crules: CRule[];
   settings: Settings | null; activity: Activity[]; comments: Comment[]; clientUsers: ClientUser[];
+  /** Financial Operations add-on (empty when it is switched off or not installed). */
+  fo: FoData;
 }
